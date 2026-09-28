@@ -438,14 +438,16 @@ await check("a Retry-After longer than the cap makes the call give up at once, n
 });
 
 await check("an HTTP-date Retry-After is honoured", async () => {
-  arm429({ retryAfter: new Date(Date.now() + 1500).toUTCString() }); // HTTP-dates have 1 s resolution: 0.5 to 1.5 s ahead
+  // HTTP-dates have 1 s resolution, so aim at a whole second 4 to 5 s ahead: after the first request's
+  // round trip the wait is 3.5 to 5 s, clearly apart from both "retry at once" and the 2 s fallback.
+  arm429({ retryAfter: new Date(Math.ceil((Date.now() + 4000) / 1000) * 1000).toUTCString() });
   const n = requests.length;
   const { res } = await call(client, "list_templates");
   assert.ok(!res.isError);
   const tries = since(n).filter((r) => r.path === "/templates");
   assert.equal(tries.length, 2);
   const gap = tries[1].t - tries[0].t;
-  assert.ok(gap >= 400 && gap < 1900, `retry should wait until the given date (0.5 to 1.5 s), not retry at once or use the 2 s fallback (waited ${gap} ms)`);
+  assert.ok(gap >= 3000 && gap < 5600, `retry should wait until the given date (3.5 to 5 s), not retry at once or use the 2 s fallback (waited ${gap} ms)`);
   disarm();
 });
 
